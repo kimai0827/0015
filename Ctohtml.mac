@@ -1,0 +1,527 @@
+// Cソースなどテキストファイルにhtmlタグを付加する秀丸用マクロです。
+// 2009/08/07 kimai
+// 下記マクロを参考に追加しました。
+//
+// N88basic用行番号作成マクロ
+// number.mac
+// このマクロはN88basicソースファイルの行番号を作成するものです。
+// 2000.08.19 by Toru Yumoto
+//	$str1 = input("最初の行番号を入力してください。","10000");
+//	$str2 = input("行番号の間隔を入力してください。","10");
+
+	$str1 = "1";
+	$str2 = "1";
+
+	#Int1 = val($str1);	//行番号初期値
+	#Int2 = val($str2);	//行番号間隔
+
+	gofiletop;		//ファイルの先頭
+	insert "\x20";
+	insert "\x20";
+	insert "\x20";
+	insert $str1;		//先頭の行番号を挿入
+	insert "\x20";
+
+top:
+	down;
+	golinetop;
+	if( code == eof ) {
+		message "正常終了";
+		goto Exit;
+	}
+	#Int1 = #Int1 + #Int2;	//指定された間隔を計算
+	if( #Int1 < 10){
+		insert "\x20";
+	}
+	if( #Int1 < 100){
+		insert "\x20";
+	}
+	if( #Int1 < 1000){
+		insert "\x20";
+	}
+	$str3=str(#Int1);	//追い番挿入
+	insert $str3;
+	insert "\x20";
+	goto top;
+
+Exit:
+	gofiletop;		//ファイルの先頭
+//	endmacro;		//マクロ終了
+
+
+//----------------------------------------------------------
+// CpptoHtml.mac
+// C++ソースをHTML変換
+// Yamamoto Yasuma 2005/09/06
+// http://www7.plala.or.jp/kfb/
+//
+// 選択範囲もしくは全文に対して、以下の処理を行います。
+// ・C++キーワードのタグ付け(on/off可能、初期値on)
+// ・C++コメントのタグ付け
+// ・タブ->空白変換（空白文字数は秀丸エディタの設定に依存）
+// ・&,",<,> の文字実体参照変換
+// ・改行タグの付加（on/off可能、初期値off）
+// ・ヘッダ・フッタの付加（on/off可能、初期値on）
+//
+// コメント内・ダブルクォート内にキーワードとマッチする文字列があっても、タグをつけません。
+// 数万行に達するようなコードを変換するには時間を要します。
+// カスタマイズは以下ソースのオプション部分を変更してください。
+//----------------------------------------------------------
+
+title "セットアップ中...";
+disabledraw;
+
+//----------------------------------------------------------
+// オプション
+//----------------------------------------------------------
+//デバッグするか
+#Debug = no;
+
+//ヘッダ・フッタを付加するか
+#DoAddHeaderFooter = yes;
+//ソースの前に付加する文字列
+$Header = "<div class=\"code\"><pre class=\"source\">\n";
+//ソースの後に付加する文字列
+$Footer = "</pre></div>\n";
+
+//改行タグを入れるか
+#DoReplaceLineBreak = no;
+//改行タグ
+$LineBreak = "<br />";
+
+//キーワード強調を行うか？
+#DoEmphasizeKeyword = yes;
+//キーワードに付加するタグ
+$KeywordBegin = "<span class=\"keyword\">";
+$KeywordEnd = "</span>";
+
+//コメントに付加するタグ
+$CommentBegin = "<span class=\"comment\">";
+$CommentEnd = "</span>";
+
+//----------------------------------------------------------
+// 内部動作的な変数
+//----------------------------------------------------------
+
+//コメントにつけるタグのマーク。まず使わないような文字を指定
+$CommentMarkBegin = "\xff0";
+$CommentMarkEnd = "\xff1";
+//キーワードにつけるタグのマーク。まず使わないような文字を指定
+$KeywordMarkBegin = "\xff2";
+$KeywordMarkEnd = "\xff3";
+//キーワードにつけるタグのマーク、無効化されたもの。上の二つと文字数が同じでないと正しく動作しません
+$KeywordMarkDisabled = "\xff4";
+
+//キーワード
+#NumKeyword = 0;
+call AddKeyword "#define", no;	//正規表現を使うときは後ろのフラグをyesにする
+call AddKeyword "#elif", no;
+call AddKeyword "#else|else", yes;	//重複するので正規表現で一度に変換
+call AddKeyword "#endif", no;
+call AddKeyword "#error", no;
+call AddKeyword "#if|if", yes;	//重複するので正規表現で一度に変換
+call AddKeyword "#ifdef", no;
+call AddKeyword "#ifndef", no;
+call AddKeyword "#include", no;
+call AddKeyword "#line", no;
+call AddKeyword "#undef", no;
+call AddKeyword "#pragma", no;
+
+call AddKeyword "asm", no;
+call AddKeyword "auto", no;
+call AddKeyword "bool", no;
+call AddKeyword "break", no;
+call AddKeyword "case", no;
+call AddKeyword "catch", no;
+call AddKeyword "char", no;
+call AddKeyword "class", no;
+call AddKeyword "const", no;
+call AddKeyword "const_cast", no;
+call AddKeyword "continue", no;
+call AddKeyword "default", no;
+call AddKeyword "delete", no;
+call AddKeyword "do", no;
+call AddKeyword "double", no;
+call AddKeyword "dynamic_cast", no;
+call AddKeyword "enum", no;
+call AddKeyword "explicit", no;
+call AddKeyword "export", no;
+call AddKeyword "extern", no;
+call AddKeyword "false", no;
+call AddKeyword "float", no;
+call AddKeyword "for", no;
+call AddKeyword "friend", no;
+call AddKeyword "goto", no;
+call AddKeyword "inline", no;
+call AddKeyword "int", no;
+call AddKeyword "long", no;
+call AddKeyword "mutable", no;
+call AddKeyword "namespace", no;
+call AddKeyword "new", no;
+call AddKeyword "operator", no;
+call AddKeyword "private", no;
+call AddKeyword "protected", no;
+call AddKeyword "public", no;
+call AddKeyword "register", no;
+call AddKeyword "reinterpret_cast", no;
+call AddKeyword "return", no;
+call AddKeyword "short", no;
+call AddKeyword "signed", no;
+call AddKeyword "sizeof", no;
+call AddKeyword "static", no;
+call AddKeyword "static_cast", no;
+call AddKeyword "struct", no;
+call AddKeyword "switch", no;
+call AddKeyword "template", no;
+call AddKeyword "this", no;
+call AddKeyword "throw", no;
+call AddKeyword "true", no;
+call AddKeyword "try", no;
+call AddKeyword "typedef", no;
+call AddKeyword "typeid", no;
+call AddKeyword "typename", no;
+call AddKeyword "union", no;
+call AddKeyword "unsigned", no;
+call AddKeyword "using", no;
+call AddKeyword "virtual", no;
+call AddKeyword "void", no;
+call AddKeyword "volatile", no;
+call AddKeyword "while", no;
+
+
+//----------------------------------------------------------
+// メイン処理
+//----------------------------------------------------------
+
+$SearchBuffer  = searchbuffer;
+#SearchOption  = searchoption;
+$ReplaceBuffer = replacebuffer;
+
+//選択範囲をテンポラリに持っていく
+if( !selecting )
+	selectall;
+
+call MoveTemp;
+#SrcHidemaru = ##return;
+
+//キーワードにマークをつける
+if (#DoEmphasizeKeyword)
+{
+	##i = 0;
+	call TitleMsg "キーワード処理中...";
+//	$$MsgNumKeyword = "/" + str(#NumKeyword) + ")";
+	while (##i < #NumKeyword)
+	{
+//		call TitleMsg "キーワード処理中(" + str(##i + 1) + $$MsgNumKeyword;
+		if (! #IsKeywordRegular[##i])
+		{	//キーワードが正規表現でない
+			replaceallfast $Keyword[##i], $KeywordMarkBegin + $Keyword[##i] + $KeywordMarkEnd, word, casesense, noregular;
+		}
+		else
+		{	//キーワードが正規表現
+			setsearch $Keyword[##i], 19;
+			gofiletop;
+			while(1)
+			{
+				finddown2;
+				if (result)
+				{
+					$$Found = gettext(foundtopx, foundtopy, foundendx, foundendy);
+					beginsel;
+					moveto foundendx, foundendy;
+					delete;
+					insert $KeywordMarkBegin + $$Found + $KeywordMarkEnd;
+				}
+				else
+				{
+					break;
+				}
+			}
+		}
+		##i = ##i + 1;
+	}
+
+}
+
+//コメント処理
+gofiletop;
+#Finished = false;
+call TitleMsg "コメント処理中...";
+//$$MsgLineCount = "/" + str(linecount2) + ")";
+while (! #Finished)
+{
+	//コメント開始点を探す
+//	call TitleMsg "コメント処理中(" + str(lineno) + $$MsgLineCount;
+
+	searchdown2 "/\\*|//|\"|'", casesense, regular; //  /*,//,",'にヒット
+
+	if (!result)
+	{
+		//終了
+		#Finished = true;
+	}
+	else
+	{
+		##ComX = foundtopx;
+		##ComY = foundtopy;
+		moveto foundendx - 1, foundendy;
+
+		if (code == 0x2a)	// *
+		{
+			// "/*"コメント
+			moveto ##ComX, ##ComY;	// コメント記号の前に移動
+			insert $CommentMarkBegin;
+			right;
+			right;
+			##ComBeginX = x;
+			##ComBeginY = y;
+
+			// コメント終了点を探す
+			searchdown2 "*/", casesense, noregular;
+			if (result)
+			{
+				moveto foundendx, foundendy;
+			}
+			else
+			{
+				gofileend;
+				#Finished = true;
+			}
+
+			call DisableKeywordMark ##ComBeginX, ##ComBeginY;
+
+			insert $CommentMarkEnd;
+		}
+		else
+		{
+			if (code == 0x2f) // /
+			{
+				// "//"コメント
+				moveto ##ComX, ##ComY;	// コメント記号の前に移動
+				insert $CommentMarkBegin;	//コメント開始タグを挿入
+				right;
+				right;
+				##ComBeginX = x;
+				##ComBeginY = y;
+
+				golineend2;		//コメント終了位置（行の最後）に移動
+
+				call DisableKeywordMark ##ComBeginX, ##ComBeginY;
+
+				insert $CommentMarkEnd;
+			}
+			else
+			{
+				if (code == 0x22)	// "
+				{
+					// 開始点まで移動
+					moveto ##ComX, ##ComY;
+					// 終了点を探す
+					setsearch "\"", 2;
+					while(1)
+					{
+						finddown;
+						if (result)
+						{
+							call IsEscape;
+							if (! ##return)
+							{
+								right;
+								break;
+							}
+						}
+						else
+						{
+							gofileend;
+							#Finished = true;
+							break;
+						}
+					}
+					call DisableKeywordMark ##ComX, ##ComY;
+				}
+				else
+				{	// '
+					// 終了点を探す
+					setsearch "'", 2;
+					while(1)
+					{
+						finddown;
+						if (result)
+						{
+							call IsEscape;
+							if (! ##return)
+							{
+								right;
+								break;
+							}
+						}
+						else
+						{
+							gofileend;
+							#Finished = true;
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+//タブ->空白変換と実体参照変換
+call TitleMsg "タブ・実体参照変換中...";
+selectall;
+tospace;
+replaceallfast "&", "&amp;";
+replaceallfast "\"", "&quot;";
+replaceallfast "<", "&lt;";
+replaceallfast ">", "&gt;";
+
+//マークを変換
+call TitleMsg "マーク変換中...";
+if (#DoEmphasizeKeyword)
+{
+	replaceallfast $KeywordMarkDisabled, "", casesense, noregular;
+	replaceallfast $KeywordMarkBegin, $KeywordBegin, casesense, noregular;
+	replaceallfast $KeywordMarkEnd, $KeywordEnd, casesense, noregular;
+}
+replaceallfast $CommentMarkBegin, $CommentBegin, casesense, noregular;
+replaceallfast $CommentMarkEnd, $CommentEnd, casesense, noregular;
+
+//改行タグを入れる
+if (#DoReplaceLineBreak)
+{
+	call TitleMsg "改行タグ追加中...";
+	gofiletop;
+	while (lineno < linecount2)
+	{
+		golineend2;
+		insert $LineBreak;
+		down;
+	}
+	golineend2;
+	insert $LineBreak;
+}
+
+//ヘッダ・フッタを入れる
+call TitleMsg "終了処理中...";
+if (#DoAddHeaderFooter)
+{
+	gofiletop;
+	insert $Header;
+	gofileend;
+	insert $Footer;
+}
+
+//テンポラリを閉じる
+call ReturnTemp #SrcHidemaru;
+
+setsearch $SearchBuffer, #SearchOption;
+setreplace $ReplaceBuffer;
+
+enabledraw;
+
+endmacro;
+
+
+//----------------------------------------------------------
+// サブルーチン
+//----------------------------------------------------------
+
+//キーワード追加
+AddKeyword:
+	$Keyword[#NumKeyword] = $$1;
+	#IsKeywordRegular[#NumKeyword] = ##2;
+	#NumKeyword = #NumKeyword + 1;
+	return;
+
+//キーワードマークを無効に
+DisableKeywordMark:
+	if (! #DoEmphasizeKeyword) return;
+	##EndX = x;
+	##EndY = y;
+	insert $KeywordMarkBegin;	//終点に番兵を置く
+	moveto ##1, ##2;
+	setsearch $KeywordMarkBegin + "|" + $KeywordMarkEnd, 18;
+	while(1)
+	{
+		finddown2;
+//		if (result)
+//		{
+			if (x == ##EndX && y == ##EndY)
+			{
+				beginsel;
+				moveto foundendx, foundendy;
+				delete;	//番兵を消す
+				break;
+			}
+			else
+			{
+				overwrite $KeywordMarkDisabled;	//無効化
+			}
+//		}
+//		else
+//		{
+//			break;
+//		}
+	}
+	return;
+
+//エスケープ文字かどうかを判別
+IsEscape:
+	##PosX = x;
+	##PosY = y;
+	left;
+	if (code == 0x5c)	//\
+	{
+		left;
+		if (code == 0x5c)
+		{
+			moveto ##PosX, ##PosY;
+			return false;
+		}
+		else
+		{
+			moveto ##PosX, ##PosY;
+			return true;
+		}
+	}
+	moveto ##PosX, ##PosY;
+	return false;
+
+//作業用秀丸に移動
+MoveTemp:
+	cut;
+	##SrcHidemaru = hidemaruhandle(0);
+	if (#Debug)
+	{
+		newfile;
+	}
+	else
+	{
+		openfile "/h";
+	}
+	paste;
+	return ##SrcHidemaru;
+
+//作業用秀丸から戻る
+ReturnTemp:
+	selectall;
+	copy;
+	##TempHidemaru = hidemaruhandle(0);
+	setactivehidemaru ##1;
+	closehidemaruforced ##TempHidemaru;
+	paste;
+	return;
+
+//タイトルにメッセージを出す（テンポラリ作業中）
+TitleMsg:
+	##TempHidemaru = hidemaruhandle(0);
+	setactivehidemaru #SrcHidemaru;
+	title $$1;
+	setactivehidemaru ##TempHidemaru;
+	return;
+
+
+
+	
